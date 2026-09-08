@@ -828,7 +828,31 @@ async function renderForca(comp, org, sit){
     document.getElementById("f-com").textContent=N(pv["Pensionista"]||0);
     document.getElementById("f-tmp").textContent=N(pv["Temporario"]||0);
     document.getElementById("f-out").textContent=N((pv["Outros"]||0)+(pv["Nao informado"]||0));
-    dc("sit-func"); dc("vinculo");
+
+    // "Todos os Orgaos": graficos usam a quebra por vinculo do resumo.json
+    // (nao temos a situacao funcional detalhada sem carregar cada orgao)
+    const labelsPv=Object.keys(pv).sort((a,b)=>pv[b]-pv[a]);
+    const valsPv=labelsPv.map(k=>pv[k]);
+    const coresPv=["#1a4a2e","#2d7a4f","#f0b429","#2196a6","#7b3fa0","#c0392b","#d4770c","#00838f","#455a64","#6a1b9a"];
+
+    dc("sit-func");
+    charts["sit-func"]=new Chart(document.getElementById("ch-sit-func"),{
+      type:"doughnut",
+      data:{labels:labelsPv,datasets:[{data:valsPv,backgroundColor:coresPv.slice(0,labelsPv.length).map(c=>c+"cc"),borderColor:coresPv.slice(0,labelsPv.length),borderWidth:1,hoverOffset:6}]},
+      options:{responsive:true,maintainAspectRatio:false,cutout:"55%",
+        plugins:{legend:{position:"right",labels:{boxWidth:10,padding:8,font:{size:9}}},
+          tooltip:{callbacks:{label:c=>`${c.label}: ${N(c.raw)} serv.`}}}}
+    });
+
+    dc("vinculo");
+    charts["vinculo"]=new Chart(document.getElementById("ch-vinculo"),{
+      type:"bar",
+      data:{labels:labelsPv.map(l=>l.substring(0,25)),
+        datasets:[{label:"Servidores",data:valsPv,backgroundColor:coresPv.slice(0,labelsPv.length).map(c=>c+"cc"),borderColor:coresPv.slice(0,labelsPv.length),borderWidth:1,borderRadius:3}]},
+      options:{responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>N(c.raw)+" servidores"}}},
+        scales:{x:{grid:{display:false},ticks:{font:{size:8}}},y:{grid:{color:"#e8edf0"},ticks:{callback:v=>N(v)}}}}
+    });
     return;
   }
 
