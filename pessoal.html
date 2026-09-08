@@ -1051,12 +1051,17 @@ async function getRubricasAgregado(comp){
   return rubricasAgregadoCache[comp];
 }
 
-function classificarIndicadorSDP(natureza){
+function classificarIndicadorSDP(natureza, nome){
+  // A "natureza" do portal e um balde generico (ex: "VERBAS EVENTUAIS",
+  // "REMUNERACAO BASICA") -- nao tem os textos detalhados do eSocial do
+  // SIGRH antigo. O nome da rubrica (ex: "13 SALARIO ADIANTAMENTO",
+  // "1/3 FERIAS ART. 7 VII CF EST") e que carrega essa informacao agora.
   const n=(natureza||"").toUpperCase();
-  if(n.includes("FERIAS")) return "ferias";
-  if(n.includes("DECIMO TERCEIRO") || n.includes("GRATIFICACAO NATAL")) return "13o";
-  if(n.includes("HORA EXTR")) return "horas_extras";
-  if(n.includes("INDENIZ")) return "indenizatoria";
+  const nm=(nome||"").toUpperCase();
+  if(nm.includes("FERIA")) return "ferias";
+  if(/\b13\b.*SAL|SAL.*\b13\b|DECIMO TERCEIRO|GRATIFICACAO NATAL/.test(nm)) return "13o";
+  if(n.includes("HORA EXTR") || nm.includes("HORA EXTR")) return "horas_extras";
+  if(nm.includes("INDENIZ") || n.includes("INDENIZ")) return "indenizatoria";
   return null;
 }
 
@@ -1071,7 +1076,7 @@ async function renderRubricas(comp){
 
   const indicadores = {ferias:0, "13o":0, horas_extras:0, indenizatoria:0};
   rubricas.forEach(r=>{
-    const tipo = classificarIndicadorSDP(r.natureza_esocial);
+    const tipo = classificarIndicadorSDP(r.natureza_esocial, r.nome);
     if(tipo) indicadores[tipo]+=r.valor;
   });
   document.getElementById("r-fer").textContent = BRL(indicadores.ferias);
