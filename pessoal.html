@@ -738,11 +738,18 @@ async function renderEvolucao(org){
 
 // ── ABA 3: COMPOSIÇÃO ────────────────────────────────────────────
 async function renderComposicao(comp, org){
-  // Se org selecionado, usa rubricas do emp_X
+  // Se org selecionado, usa rubricas do emp_X; senao, usa o agregado do GDF
+  // inteiro (rubricas_agregado.json), no mesmo formato.
   let rubricas=[];
   if(org){
     await getEmp(comp,org);
     rubricas=await getRubricas(comp,org);
+  } else {
+    const agregado = await getRubricasAgregado(comp);
+    rubricas = agregado.map(r=>({
+      cod: r.cod, nome: (r.nome||"").trim(), natureza: (r.natureza_esocial||"").trim(),
+      tipo: Math.floor(r.cod/10000), valor: r.valor
+    }));
   }
 
   // Agrega por grupo
