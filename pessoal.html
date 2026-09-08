@@ -419,19 +419,33 @@ async function init(){
       return `<option value="${c}">${MESES[m]}/${c.substring(0,4)}</option>`;
     }).join("");
 
-    // Carrega todos os resumos disponíveis para aba de evolução
-    spm("Carregando resumos...");
-    for(const c of comps){
-      if(!resumoCache[c]){
-        const rr = await fetch(BASE+"/"+c+"/resumo.json?t="+Date.now());
-        if(rr.ok) resumoCache[c] = await rr.json();
-      }
+    // Carrega so a competencia mais recente pra liberar a tela rapido --
+    // as demais (usadas so nos graficos historicos de Evolucao/Composicao)
+    // sao buscadas em paralelo depois, em segundo plano, sem bloquear.
+    spm("Carregando resumo mais recente...");
+    if(!resumoCache[comps[0]]){
+      const rr = await fetch(BASE+"/"+comps[0]+"/resumo.json?t="+Date.now());
+      if(rr.ok) resumoCache[comps[0]] = await rr.json();
     }
 
     popularOrgaos(comps[0]);
     setTimeout(()=>document.getElementById("splash").classList.add("hide"),300);
     aplicar();
+
+    carregarHistoricoEmSegundoPlano(comps);
   } catch(e){ spm("Erro: "+e.message); console.error(e); }
+}
+
+async function carregarHistoricoEmSegundoPlano(comps){
+  const pendentes = comps.filter(c=>!resumoCache[c]);
+  await Promise.all(pendentes.map(async c=>{
+    try{
+      const rr = await fetch(BASE+"/"+c+"/resumo.json?t="+Date.now());
+      if(rr.ok) resumoCache[c] = await rr.json();
+    }catch(e){ console.error("Falha ao carregar resumo "+c, e); }
+  }));
+  // re-renderiza a aba ativa (graficos historicos dependem do cache completo)
+  aplicar();
 }
 
 function popularOrgaos(comp){
@@ -441,7 +455,7 @@ function popularOrgaos(comp){
   const ov = sO.value;
   const emps = (resumo.empresas||[]).sort((a,b)=>b.total_proventos-a.total_proventos);
   sO.innerHTML = `<option value="">— Todos os Orgaos —</option>`+
-    emps.map(e=>`<option value="${e.empresa}" ${String(e.empresa)===ov?"selected":""}>${e.dc_empresa} (${e.sigla})</option>`).join("");
+    emps.map(e=>`<option value="${e.empresa}" ${String(e.empresa)===ov?"selected":""}>${e.dc_empresa}${e.sigla?" ("+e.sigla+")":""}</option>`).join("");
 }
 
 // ── APLICAR ───────────────────────────────────────────────────────
