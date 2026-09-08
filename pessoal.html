@@ -950,7 +950,12 @@ async function renderLotacao(comp, org, sit, uni){
   const lotMap={};
   registros.forEach(r=>{
     const k=(r.nivel4_lotacao||"Sem lotacao").trim()+"|"+(r.dc_sit_func||"").trim();
-    if(!lotMap[k]) lotMap[k]={lotacao:(r.nivel4_lotacao||"Sem lotacao").trim(),unidade:(r.nivel3_unidade||"").trim(),sit:(r.dc_sit_func||"").trim(),serv:0,prov:0,desc:0};
+    // "unidade" (nivel do treemap acima da lotacao) = pai imediato na cadeia
+    // hierarquica (penultimo nivel); se a cadeia so tiver 1 nivel (sem
+    // hierarquia resolvida p/ essa competencia), usa o nome do orgao.
+    const cadeia=r.hierarquia_lotacao||[];
+    const unidadePai=cadeia.length>=2?(cadeia[cadeia.length-2]||"").trim():"";
+    if(!lotMap[k]) lotMap[k]={lotacao:(r.nivel4_lotacao||"Sem lotacao").trim(),unidade:unidadePai,sit:(r.dc_sit_func||"").trim(),serv:0,prov:0,desc:0};
     lotMap[k].serv++;
     lotMap[k].prov+=r.total_proventos||0;
     lotMap[k].desc+=r.total_descontos||0;
