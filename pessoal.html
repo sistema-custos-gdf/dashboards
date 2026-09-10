@@ -950,11 +950,16 @@ async function renderLotacao(comp, org, sit, uni){
   const lotMap={};
   registros.forEach(r=>{
     const k=(r.nivel4_lotacao||"Sem lotacao").trim()+"|"+(r.dc_sit_func||"").trim();
-    // "unidade" (nivel do treemap acima da lotacao) = pai imediato na cadeia
-    // hierarquica (penultimo nivel); se a cadeia so tiver 1 nivel (sem
-    // hierarquia resolvida p/ essa competencia), usa o nome do orgao.
-    const cadeia=r.hierarquia_lotacao||[];
-    const unidadePai=cadeia.length>=2?(cadeia[cadeia.length-2]||"").trim():"";
+    // "unidade" (nivel do treemap acima da lotacao) = filho imediato do nó
+    // de referência (a Unidade filtrada, ou a raiz/orgão quando nenhuma
+    // estiver selecionada) -- NÃO o pai imediato da folha. Usar o pai
+    // imediato fazia quem está lotado direto na própria Unidade (ex: o
+    // coordenador) cair debaixo do avô dela (ex: Contadoria) em vez de
+    // aparecer junto das diretorias-irmãs dentro da mesma Unidade.
+    const cadeia=(r.hierarquia_lotacao||[]).map(n=>(n||"").trim());
+    const refIndex = uv ? cadeia.indexOf(uv) : 0;
+    const base = refIndex===-1 ? 0 : refIndex;
+    const unidadePai = cadeia[base+1] !== undefined ? cadeia[base+1] : (cadeia[cadeia.length-1]||"");
     if(!lotMap[k]) lotMap[k]={lotacao:(r.nivel4_lotacao||"Sem lotacao").trim(),unidade:unidadePai,sit:(r.dc_sit_func||"").trim(),serv:0,prov:0,desc:0};
     lotMap[k].serv++;
     lotMap[k].prov+=r.total_proventos||0;
