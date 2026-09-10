@@ -303,6 +303,9 @@ footer{background:var(--ve);color:rgba(255,255,255,.4);text-align:center;padding
   <div style="font-size:.72rem;color:var(--ts);background:rgba(45,122,79,.06);border:1px solid rgba(45,122,79,.2);border-radius:6px;padding:.5rem .8rem;margin-bottom:1rem">
     Visão <strong>GDF inteiro</strong> (não filtra por órgão) — soma de todas as rubricas de todos os órgãos na competência selecionada.
   </div>
+  <div class="toolbar" style="border-bottom:none;box-shadow:none;padding:0 0 1rem">
+    <div class="tg"><label>Rubrica</label><select id="s-rub" style="min-width:320px"><option value="">— Todas (visão geral) —</option></select></div>
+  </div>
   <div class="kpi-row">
     <div class="kpi"><div class="kpi-l">Férias</div><div class="kpi-v" id="r-fer">—</div><div class="kpi-s">valor + terço + abono</div></div>
     <div class="kpi"><div class="kpi-l">13º Salário</div><div class="kpi-v" id="r-13">—</div><div class="kpi-s">gratificação natalina</div></div>
@@ -310,6 +313,22 @@ footer{background:var(--ve);color:rgba(255,255,255,.4);text-align:center;padding
     <div class="kpi"><div class="kpi-l">Verbas Indenizatórias</div><div class="kpi-v" id="r-ind">—</div><div class="kpi-s">natureza eSocial</div></div>
     <div class="kpi"><div class="kpi-l">Rubricas Distintas</div><div class="kpi-v" id="r-qtd">—</div><div class="kpi-s">códigos usados no mês</div></div>
   </div>
+
+  <div id="rub-detalhe" style="display:none">
+    <div class="sec" id="rub-detalhe-titulo">Rubrica selecionada</div>
+    <div class="kpi-row">
+      <div class="kpi"><div class="kpi-l">Valor Total</div><div class="kpi-v" id="rd-val">—</div><div class="kpi-s" id="rd-comp">na competência</div></div>
+      <div class="kpi"><div class="kpi-l">Servidores</div><div class="kpi-v" id="rd-serv">—</div><div class="kpi-s">recebendo essa rubrica</div></div>
+      <div class="kpi"><div class="kpi-l">Valor Médio</div><div class="kpi-v" id="rd-med">—</div><div class="kpi-s">por servidor</div></div>
+      <div class="kpi"><div class="kpi-l">Natureza eSocial</div><div class="kpi-v" id="rd-nat" style="font-size:1rem">—</div><div class="kpi-s">classificação oficial</div></div>
+    </div>
+    <div class="card full">
+      <div class="ch"><div><div class="ct">Evolução da Rubrica</div><div class="cs">Ao longo das competências carregadas</div></div><span class="tag">LINHA</span></div>
+      <div class="cb tall"><canvas id="ch-rub-detalhe"></canvas></div>
+    </div>
+  </div>
+
+  <div id="rub-visao-geral">
   <div class="g2">
     <div class="card">
       <div class="ch"><div><div class="ct">Top 15 Rubricas por Custo</div><div class="cs">GDF inteiro — maiores valores</div></div><span class="tag">RANKING</span></div>
@@ -320,7 +339,8 @@ footer{background:var(--ve);color:rgba(255,255,255,.4);text-align:center;padding
       <div class="cb tall"><canvas id="ch-rub-evo"></canvas></div>
     </div>
   </div>
-  <div class="sec">Tabela Detalhada de Rubricas</div>
+  </div>
+  <div class="sec" id="rub-tabela-titulo">Tabela Detalhada de Rubricas</div>
   <div class="card full">
     <div class="table-wrap">
       <table>
@@ -1095,6 +1115,66 @@ async function renderRubricas(comp){
   document.getElementById("r-ind").textContent = BRL(indicadores.indenizatoria);
   document.getElementById("r-qtd").textContent = N(rubricas.length);
 
+  // Popula o filtro de rubrica (ordenado por valor, preserva a selecao atual)
+  const ordenadas = [...rubricas].sort((a,b)=>b.valor-a.valor);
+  const sR = document.getElementById("s-rub");
+  const rv = sR.value;
+  sR.innerHTML = `<option value="">— Todas (visão geral) —</option>` +
+    ordenadas.map(r=>`<option value="${r.cod}" ${String(r.cod)===rv?"selected":""}>${(r.nome||("Cód. "+r.cod)).trim()} — ${BRLF(r.valor)}</option>`).join("");
+  const rubSel = rv && ordenadas.some(r=>String(r.cod)===rv) ? rv : "";
+
+  const comps = Object.keys(resumoCache).sort();
+  const seriesPorComp = await Promise.all(comps.map(c=>getRubricasAgregado(c)));
+
+  if(rubSel){
+    // ── Analise focada em UMA rubrica ──
+    document.getElementById("rub-detalhe").style.display="block";
+    document.getElementById("rub-visao-geral").style.display="none";
+    document.getElementById("rub-tabela-titulo").textContent="Detalhe da Rubrica Selecionada";
+
+    const alvo = ordenadas.find(r=>String(r.cod)===rubSel);
+    document.getElementById("rub-detalhe-titulo").textContent = (alvo.nome||("Código "+alvo.cod)).trim();
+    document.getElementById("rd-val").textContent = BRLF(alvo.valor);
+    document.getElementById("rd-comp").textContent = MESES[parseInt(comp.substring(4,6))]+"/"+comp.substring(0,4);
+    document.getElementById("rd-serv").textContent = N(alvo.qtd_servidores);
+    document.getElementById("rd-med").textContent = alvo.qtd_servidores?BRLF(alvo.valor/alvo.qtd_servidores):"—";
+    document.getElementById("rd-nat").textContent = (alvo.natureza_esocial||"—").trim();
+
+    dc("rub-detalhe");
+    charts["rub-detalhe"]=new Chart(document.getElementById("ch-rub-detalhe"),{
+      type:"line",
+      data:{
+        labels:comps.map(c=>MESES[parseInt(c.substring(4,6))]+"/"+c.substring(0,4)),
+        datasets:[{
+          label:(alvo.nome||"Rubrica").trim(),
+          data:seriesPorComp.map(lista=>{
+            const item=lista.find(r=>String(r.cod)===rubSel);
+            return item?item.valor:0;
+          }),
+          borderColor:"#1a6b3c",backgroundColor:"#1a6b3c22",tension:.3,fill:true,pointRadius:3
+        }]
+      },
+      options:{responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>BRLF(c.raw)}}},
+        scales:{y:{grid:{color:"#e8edf0"},ticks:{callback:v=>BRL(v)}},x:{grid:{display:false}}}}
+    });
+
+    document.getElementById("tb-rub").innerHTML = `
+      <tr>
+        <td style="text-align:left"><strong>${(alvo.nome||"—").trim()}</strong></td>
+        <td style="text-align:left;font-size:.66rem">${(alvo.natureza_esocial||"—").trim()}</td>
+        <td>${N(alvo.qtd_servidores)}</td>
+        <td>${BRLF(alvo.valor)}</td>
+        <td>${alvo.qtd_servidores?BRLF(alvo.valor/alvo.qtd_servidores):"—"}</td>
+      </tr>`;
+    return;
+  }
+
+  // ── Visão geral (nenhuma rubrica selecionada) ──
+  document.getElementById("rub-detalhe").style.display="none";
+  document.getElementById("rub-visao-geral").style.display="block";
+  document.getElementById("rub-tabela-titulo").textContent="Tabela Detalhada de Rubricas";
+
   // Top 15 rubricas
   const top15 = rubricas.slice(0,15);
   dc("rub-top");
@@ -1112,8 +1192,6 @@ async function renderRubricas(comp){
 
   // Evolução das top 5 rubricas ao longo das competências já carregadas
   const codigosTop5 = top15.slice(0,5).map(r=>r.cod);
-  const comps = Object.keys(resumoCache).sort();
-  const seriesPorComp = await Promise.all(comps.map(c=>getRubricasAgregado(c)));
   const cores=["#1a6b3c","#f0b429","#2196a6","#7b3fa0","#c0392b"];
   dc("rub-evo");
   charts["rub-evo"]=new Chart(document.getElementById("ch-rub-evo"),{
@@ -1162,6 +1240,9 @@ document.addEventListener("DOMContentLoaded",()=>{
   document.getElementById("s-unidade").addEventListener("change",()=>{
     document.getElementById("s-sit").innerHTML=`<option value="">— Todas —</option>`;
     aplicar();
+  });
+  document.getElementById("s-rub").addEventListener("change",()=>{
+    renderRubricas(document.getElementById("s-comp").value);
   });
   init();
 });
